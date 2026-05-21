@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verificador de Planilhas</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
+
+  header {
+    background: linear-gradient(135deg, #1a237e, #283593);
+    padding: 24px 40px;
+    border-bottom: 3px solid #3949ab;
+  }
+  header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: 1px; }
+  header p  { color: #90caf9; font-size: 0.85rem; margin-top: 4px; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
+
+  /* Upload */
+  .upload-section {
+    background: #1a1d2e;
+    border: 1px solid #2a2d3e;
+    border-radius: 16px;
+    padding: 36px;
+    margin-bottom: 32px;
+  }
+  .upload-section h2 { font-size: 1.1rem; margin-bottom: 24px; color: #90caf9; }
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  .drop-zone {
+    border: 2px dashed #3949ab;
+    border-radius: 12px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    background: #12152a;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.over { border-color: #5c6bc0; background: #1a1f3a; }
+  .drop-zone.ok { border-color: #4caf50; background: #0d2018; }
+  .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-zone .icon { font-size: 2.2rem; margin-bottom: 10px; }
+  .drop-zone .label { font-size: 0.78rem; color: #7986cb; margin-bottom: 6px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+  .drop-zone .name  { font-size: 0.9rem; color: #aaa; margin-top: 6px; }
+  .drop-zone.ok .name { color: #81c784; font-weight: 600; }
+
+  .btn-processar {
+    margin-top: 28px;
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #1565c0, #0d47a1);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: opacity .2s;
+  }
+  .btn-processar:hover { opacity: .85; }
+  .btn-processar:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Loading */
+  .loading { display: none; text-align: center; padding: 40px; }
+  .spinner {
+    width: 52px; height: 52px;
+    border: 5px solid #2a2d3e;
+    border-top-color: #5c6bc0;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Dashboard */
+  .dashboard { display: none; }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  @media(max-width:800px){ .cards { grid-template-columns: 1fr 1fr; } .upload-grid { grid-template-columns: 1fr; } }
+
+  .card {
+    border-radius: 14px;
+    padding: 22px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+  }
+  .card-verde  { background: #0a2416; }  .card-verde::before  { background: #4caf50; }
+  .card-amarelo{ background: #231a00; }  .card-amarelo::before{ background: #ffb300; }
+  .card-laranja{ background: #1e0f00; }  .card-laranja::before{ background: #f57c00; }
+  .card-vermelho{ background: #200a0a; } .card-vermelho::before{ background: #e53935; }
+
+  .card .titulo { font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
+  .card .qtd    { font-size: 2rem; font-weight: 800; line-height: 1; }
+  .card .val    { font-size: 0.82rem; margin-top: 6px; }
+  .card-verde   .qtd { color: #66bb6a; } .card-verde   .val { color: #a5d6a7; }
+  .card-amarelo .qtd { color: #ffd54f; } .card-amarelo .val { color: #ffe082; }
+  .card-laranja .qtd { color: #ffa726; } .card-laranja .val { color: #ffcc80; }
+  .card-vermelho.qtd { color: #ef5350; } .card-vermelho .val { color: #ef9a9a; }
+  .card-vermelho .qtd { color: #ef5350; }
+
+  .total-bar {
+    background: #1a1d2e;
+    border: 1px solid #2a2d3e;
+    border-radius: 12px;
+    padding: 20px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  .total-bar .t { font-size: 0.8rem; color: #7986cb; text-transform: uppercase; letter-spacing: .5px; }
+  .total-bar .v { font-size: 1.5rem; font-weight: 800; color: #fff; }
+
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+  @media(max-width:700px){ .charts-grid { grid-template-columns: 1fr; } }
+
+  .chart-box {
+    background: #1a1d2e;
+    border: 1px solid #2a2d3e;
+    border-radius: 14px;
+    padding: 24px;
+  }
+  .chart-box h3 { font-size: 0.85rem; color: #90caf9; margin-bottom: 16px; text-transform: uppercase; letter-spacing: .5px; }
+
+  .banco-table {
+    background: #1a1d2e;
+    border: 1px solid #2a2d3e;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+  }
+  .banco-table h3 { font-size: 0.85rem; color: #90caf9; margin-bottom: 16px; text-transform: uppercase; letter-spacing: .5px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  th { text-align: left; padding: 10px 14px; color: #7986cb; font-weight: 600; border-bottom: 1px solid #2a2d3e; }
+  td { padding: 10px 14px; border-bottom: 1px solid #1e2130; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1e2233; }
+  .bar-cell { display: flex; align-items: center; gap: 10px; }
+  .bar-bg { flex: 1; height: 6px; background: #2a2d3e; border-radius: 3px; }
+  .bar-fill { height: 6px; background: #ef5350; border-radius: 3px; transition: width .4s; }
+
+  .btn-download {
+    width: 100%;
+    padding: 18px;
+    background: linear-gradient(135deg, #2e7d32, #1b5e20);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: opacity .2s;
+  }
+  .btn-download:hover { opacity: .85; }
+
+  .erro { background: #200a0a; border: 1px solid #c62828; border-radius: 10px; padding: 16px 20px; color: #ef9a9a; margin-top: 16px; display: none; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+  .badge-verde  { background: #1b5e20; color: #a5d6a7; }
+  .badge-amarelo{ background: #f57f17; color: #fff9c4; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Verificador de Planilhas</h1>
+  <p>Suba a planilha JAPA e a planilha NOSSA — o sistema faz o batimento e gera o resultado automaticamente</p>
+</header>
+
+<div class="container">
+
+  <!-- UPLOAD -->
+  <div class="upload-section">
+    <h2>1. Selecione as planilhas</h2>
+    <div class="upload-grid">
+      <div class="drop-zone" id="dz-japa">
+        <input type="file" id="file-japa" accept=".xlsx">
+        <div class="icon">📋</div>
+        <div class="label">Planilha JAPA</div>
+        <div class="name" id="nome-japa">Clique ou arraste o arquivo aqui</div>
+      </div>
+      <div class="drop-zone" id="dz-nossa">
+        <input type="file" id="file-nossa" accept=".xlsx">
+        <div class="icon">🏢</div>
+        <div class="label">Planilha NOSSA (Promotora)</div>
+        <div class="name" id="nome-nossa">Clique ou arraste o arquivo aqui</div>
+      </div>
+    </div>
+    <button class="btn-processar" id="btn-processar" disabled onclick="processar()">
+      ANALISAR PLANILHAS
+    </button>
+    <div class="erro" id="erro-box"></div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p style="color:#7986cb">Processando planilhas...</p>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="dashboard" id="dashboard">
+
+    <div class="cards">
+      <div class="card card-verde">
+        <div class="titulo">Pagos que BATEM</div>
+        <div class="qtd" id="c-bate-qtd">0</div>
+        <div class="val" id="c-bate-val">R$ 0,00</div>
+      </div>
+      <div class="card card-amarelo">
+        <div class="titulo">Pagos que FALTAM na NOSSA</div>
+        <div class="qtd" id="c-falta-qtd">0</div>
+        <div class="val" id="c-falta-val">R$ 0,00</div>
+      </div>
+      <div class="card card-laranja">
+        <div class="titulo">Nao Pagos COM registro</div>
+        <div class="qtd" id="c-npbate-qtd">0</div>
+        <div class="val" id="c-npbate-val">R$ 0,00</div>
+      </div>
+      <div class="card card-vermelho">
+        <div class="titulo">Nao Pagos SEM registro</div>
+        <div class="qtd" id="c-npsem-qtd">0</div>
+        <div class="val" id="c-npsem-val">R$ 0,00</div>
+      </div>
+    </div>
+
+    <div class="total-bar">
+      <div>
+        <div class="t">Total geral</div>
+        <div class="v" id="total-qtd-val">0 registros</div>
+      </div>
+      <div style="text-align:right">
+        <div class="t">Valor total liberado</div>
+        <div class="v" id="total-val">R$ 0,00</div>
+      </div>
+    </div>
+
+    <div class="charts-grid">
+      <div class="chart-box">
+        <h3>Distribuicao por quantidade</h3>
+        <canvas id="chart-qtd"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Distribuicao por valor (R$)</h3>
+        <canvas id="chart-val"></canvas>
+      </div>
+    </div>
+
+    <div class="banco-table">
+      <h3>Pagos que FALTAM na NOSSA — por banco</h3>
+      <table>
+        <thead><tr><th>Banco</th><th>Qtd</th><th>Valor (R$)</th><th style="width:200px">Proporcao</th></tr></thead>
+        <tbody id="tabela-banco"></tbody>
+      </table>
+    </div>
+
+    <button class="btn-download" id="btn-download" onclick="baixar()">
+      BAIXAR PLANILHA COMPLETA (.xlsx)
+    </button>
+  </div>
+
+</div>
+
+<script>
+let sidAtual = null;
+let chartQtd = null, chartVal = null;
+
+function fmt(v) {
+  return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// drag & drop
+['japa','nossa'].forEach(k => {
+  const dz  = document.getElementById('dz-' + k);
+  const inp = document.getElementById('file-' + k);
+  const nm  = document.getElementById('nome-' + k);
+  inp.addEventListener('change', () => { if(inp.files[0]){ nm.textContent = inp.files[0].name; dz.classList.add('ok'); verificar(); } });
+  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if(f){ const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; nm.textContent = f.name; dz.classList.add('ok'); verificar(); }
+  });
+});
+
+function verificar() {
+  const j = document.getElementById('file-japa').files[0];
+  const n = document.getElementById('file-nossa').files[0];
+  document.getElementById('btn-processar').disabled = !(j && n);
+}
+
+function processar() {
+  const j = document.getElementById('file-japa').files[0];
+  const n = document.getElementById('file-nossa').files[0];
+  if(!j || !n) return;
+
+  document.getElementById('erro-box').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('btn-processar').disabled = true;
+
+  const fd = new FormData();
+  fd.append('japa', j);
+  fd.append('nossa', n);
+
+  fetch('/processar', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('btn-processar').disabled = false;
+      if(data.erro) { mostrarErro(data.erro); return; }
+      mostrarDashboard(data);
+    })
+    .catch(e => {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('btn-processar').disabled = false;
+      mostrarErro('Erro ao processar: ' + e.message);
+    });
+}
+
+function mostrarErro(msg) {
+  const el = document.getElementById('erro-box');
+  el.textContent = 'Erro: ' + msg;
+  el.style.display = 'block';
+}
+
+function mostrarDashboard(d) {
+  sidAtual = d.sid;
+  document.getElementById('dashboard').style.display = 'block';
+
+  document.getElementById('c-bate-qtd').textContent  = d.pago_bate.qtd;
+  document.getElementById('c-bate-val').textContent  = fmt(d.pago_bate.val);
+  document.getElementById('c-falta-qtd').textContent = d.pago_falta.qtd;
+  document.getElementById('c-falta-val').textContent = fmt(d.pago_falta.val);
+  document.getElementById('c-npbate-qtd').textContent= d.npago_bate.qtd;
+  document.getElementById('c-npbate-val').textContent= fmt(d.npago_bate.val);
+  document.getElementById('c-npsem-qtd').textContent = d.npago_nao_bate.qtd;
+  document.getElementById('c-npsem-val').textContent = fmt(d.npago_nao_bate.val);
+  document.getElementById('total-qtd-val').textContent = d.total_qtd + ' registros';
+  document.getElementById('total-val').textContent = fmt(d.total_val);
+
+  // graficos
+  const labels = ['Pagos BATEM', 'Pagos FALTAM', 'Nao Pago c/ reg', 'Nao Pago s/ reg'];
+  const qtds   = [d.pago_bate.qtd, d.pago_falta.qtd, d.npago_bate.qtd, d.npago_nao_bate.qtd];
+  const vals   = [d.pago_bate.val, d.pago_falta.val, d.npago_bate.val, d.npago_nao_bate.val];
+  const cores  = ['#4caf50','#ffb300','#f57c00','#e53935'];
+
+  if(chartQtd) chartQtd.destroy();
+  if(chartVal) chartVal.destroy();
+
+  const opts = (data, label) => ({
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: cores, borderWidth: 0 }] },
+    options: {
+      plugins: {
+        legend: { labels: { color: '#ccc', font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${label === 'val' ? fmt(ctx.raw) : ctx.raw}` } }
+      }
+    }
+  });
+
+  chartQtd = new Chart(document.getElementById('chart-qtd'), opts(qtds, 'qtd'));
+  chartVal = new Chart(document.getElementById('chart-val'), opts(vals, 'val'));
+
+  // tabela bancos
+  const tbody = document.getElementById('tabela-banco');
+  tbody.innerHTML = '';
+  const bancos = Object.entries(d.por_banco);
+  const maxVal = bancos.length ? bancos[0][1].val : 1;
+  bancos.forEach(([banco, info]) => {
+    const pct = Math.round((info.val / maxVal) * 100);
+    tbody.innerHTML += `
+      <tr>
+        <td>${banco}</td>
+        <td>${info.qtd}</td>
+        <td>${fmt(info.val)}</td>
+        <td><div class="bar-cell"><div class="bar-bg"><div class="bar-fill" style="width:${pct}%"></div></div><span style="font-size:.75rem;color:#888">${pct}%</span></div></td>
+      </tr>`;
+  });
+
+  document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' });
+}
+
+function baixar() {
+  if(!sidAtual) return;
+  window.location.href = '/download/' + sidAtual;
+}
+</script>
+</body>
+</html>

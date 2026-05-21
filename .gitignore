@@ -1,0 +1,5 @@
+uploads/*.xlsx
+resultados/*.xlsx
+__pycache__/
+*.pyc
+.env
