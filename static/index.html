@@ -248,6 +248,12 @@
       </div>
     </div>
 
+    <!-- ALERTAS DE CPF -->
+    <div class="total-bar" id="cpf-alert-bar" style="display: none; background: #2a1b1b; border: 1px solid #c62828; flex-direction: column; align-items: flex-start; gap: 8px;">
+      <div class="t" style="color: #ef9a9a;">⚠️ Alertas de Formatação de CPF</div>
+      <div class="v" id="cpf-alert-text" style="font-size: 0.95rem; font-weight: 500; color: #ffcdd2;"></div>
+    </div>
+
     <div class="charts-grid">
       <div class="chart-box">
         <h3>Distribuicao por quantidade</h3>
@@ -352,6 +358,24 @@ function mostrarDashboard(d) {
   document.getElementById('c-npsem-val').textContent = fmt(d.npago_nao_bate.val);
   document.getElementById('total-qtd-val').textContent = d.total_qtd + ' registros';
   document.getElementById('total-val').textContent = fmt(d.total_val);
+
+  // Alertas de CPF
+  const alertBar = document.getElementById('cpf-alert-bar');
+  const alertText = document.getElementById('cpf-alert-text');
+  let alertas = [];
+  if (d.japa_format_erros > 0) {
+    alertas.push(`A planilha <strong>JAPA</strong> possui <strong>${d.japa_format_erros}</strong> CPF(s) sem a pontuação correta (pontos e/ou traço).`);
+  }
+  if (d.nossa_format_erros > 0) {
+    alertas.push(`A planilha <strong>NOSSA</strong> possui <strong>${d.nossa_format_erros}</strong> CPF(s) sem a pontuação correta (pontos e/ou traço).`);
+  }
+  
+  if (alertas.length > 0) {
+    alertText.innerHTML = alertas.join('<br>');
+    alertBar.style.display = 'flex';
+  } else {
+    alertBar.style.display = 'none';
+  }
 
   // graficos
   const labels = ['Pagos BATEM', 'Pagos FALTAM', 'Nao Pago c/ reg', 'Nao Pago s/ reg'];

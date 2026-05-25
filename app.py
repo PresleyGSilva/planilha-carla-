@@ -14,6 +14,25 @@ def clean_cpf(v):
     if not v: return None
     return str(v).replace('.','').replace('-','').replace(' ','').strip().replace('\xa0','')
 
+def verificar_formatacao_cpf(v):
+    if not v: return "Não informado"
+    s = str(v).replace(' ', '').replace('\xa0', '').strip()
+    if not s: return "Não informado"
+    
+    cleaned = s.replace('.', '').replace('-', '')
+    if not cleaned.isdigit() or len(cleaned) != 11:
+        return "CPF Inválido"
+        
+    tem_ponto = '.' in s
+    tem_traco = '-' in s
+    if not tem_ponto and not tem_traco:
+        return "Sem ponto e sem traço"
+    elif not tem_ponto:
+        return "Sem ponto"
+    elif not tem_traco:
+        return "Sem traço"
+    return "OK"
+
 def clean_prop(v):
     if not v: return None
     return str(v).strip()
@@ -48,18 +67,32 @@ def processar(path_japa, path_nossa):
 
     nossa_por_cpf  = {}
     nossa_por_prop = {}
+    nossa_format_problemas = 0
     for row in ws2.iter_rows(min_row=4, values_only=True):
         if not any(row): continue
         cpf  = clean_cpf(row[20])
         prop = clean_prop(row[4])
         if cpf:  nossa_por_cpf[cpf]   = row
         if prop: nossa_por_prop[prop] = row
+        
+        # Verificar formatação do CPF na planilha NOSSA
+        if row[20]:
+            nossa_fmt = verificar_formatacao_cpf(row[20])
+            if nossa_fmt not in ("OK", "Não informado"):
+                nossa_format_problemas += 1
 
     pago_bate, pago_falta, npago_bate, npago_nao_bate = [], [], [], []
+    japa_format_problemas = 0
 
     for row in ws1.iter_rows(min_row=2, values_only=True):
         if row[1] in (None, 'CPF'): continue
         if banco_ignorar(row[12]):  continue
+        
+        # Verificar formatação do CPF na planilha JAPA
+        japa_fmt = verificar_formatacao_cpf(row[1])
+        if japa_fmt not in ("OK", "Não informado"):
+            japa_format_problemas += 1
+
         status   = row[11]
         cpf      = clean_cpf(row[1])
         proposta = clean_prop(row[4])
@@ -89,6 +122,8 @@ def processar(path_japa, path_nossa):
         'total_qtd':        len(pago_bate)+len(pago_falta)+len(npago_bate)+len(npago_nao_bate),
         'total_val':        round(v1+v2+v3+v4, 2),
         'por_banco':        {k: v for k, v in sorted(bd_falta.items(), key=lambda x: -x[1]['val'])},
+        'japa_format_erros': japa_format_problemas,
+        'nossa_format_erros': nossa_format_problemas,
         '_listas':          (pago_bate, pago_falta, npago_bate, npago_nao_bate),
         '_header':          [cell.value for cell in ws1[1]],
     }
@@ -129,29 +164,85 @@ def gerar_xlsx(resultado):
     # ── Aba 1: Rascunho geral ──
     ws_r = wb.active
     ws_r.title = "Rascunho Geral"
-    write_header(ws_r, header + ['SITUACAO NA NOSSA'])
+    write_header(ws_r, header + ['SITUACAO NA NOSSA', 'PONTUACAO CPF JAPA', 'PONTUACAO CPF NOSSA'])
+    
+    idx_situacao = len(header) + 1
+    idx_japa_fmt = len(header) + 2
+    idx_nossa_fmt = len(header) + 3
+    
     rn = 2
     for item in pago_bate:
         row = item[0]
+        nr = item[1]
         for i, v in enumerate(row, 1): ws_r.cell(rn, i, v).fill = GREEN
         ws_r.cell(rn, 6).number_format = 'R$ #,##0.00'
-        ws_r.cell(rn, 16, 'PAGO - BATE COM NOSSA').fill = GREEN
+        ws_r.cell(rn, idx_situacao, 'PAGO - BATE COM NOSSA').fill = GREEN
+        
+        japa_fmt = verificar_formatacao_cpf(row[1])
+        c_japa = ws_r.cell(rn, idx_japa_fmt, japa_fmt)
+        c_japa.fill = GREEN
+        if japa_fmt != "OK" and japa_fmt != "Não informado":
+            c_japa.font = Font(color="9C0006", bold=True)
+            
+        nossa_fmt = verificar_formatacao_cpf(nr[20]) if nr else "Não encontrado"
+        c_nossa = ws_r.cell(rn, idx_nossa_fmt, nossa_fmt)
+        c_nossa.fill = GREEN
+        if nossa_fmt != "OK" and nossa_fmt not in ("Não informado", "Não encontrado"):
+            c_nossa.font = Font(color="9C0006", bold=True)
+            
         rn += 1
+        
     for row in pago_falta:
         for i, v in enumerate(row, 1): ws_r.cell(rn, i, v).fill = YELLOW
         ws_r.cell(rn, 6).number_format = 'R$ #,##0.00'
-        ws_r.cell(rn, 16, 'PAGO - FALTA NA NOSSA').fill = YELLOW
+        ws_r.cell(rn, idx_situacao, 'PAGO - FALTA NA NOSSA').fill = YELLOW
+        
+        japa_fmt = verificar_formatacao_cpf(row[1])
+        c_japa = ws_r.cell(rn, idx_japa_fmt, japa_fmt)
+        c_japa.fill = YELLOW
+        if japa_fmt != "OK" and japa_fmt != "Não informado":
+            c_japa.font = Font(color="9C0006", bold=True)
+            
+        c_nossa = ws_r.cell(rn, idx_nossa_fmt, "Não encontrado")
+        c_nossa.fill = YELLOW
+        
         rn += 1
+        
     for item in npago_bate:
         row = item[0]
+        nr = item[1]
         for i, v in enumerate(row, 1): ws_r.cell(rn, i, v).fill = ORANGE
         ws_r.cell(rn, 6).number_format = 'R$ #,##0.00'
-        ws_r.cell(rn, 16, f'NAO PAGO - TEM NA NOSSA - {row[11]}').fill = ORANGE
+        ws_r.cell(rn, idx_situacao, f'NAO PAGO - TEM NA NOSSA - {row[11]}').fill = ORANGE
+        
+        japa_fmt = verificar_formatacao_cpf(row[1])
+        c_japa = ws_r.cell(rn, idx_japa_fmt, japa_fmt)
+        c_japa.fill = ORANGE
+        if japa_fmt != "OK" and japa_fmt != "Não informado":
+            c_japa.font = Font(color="9C0006", bold=True)
+            
+        nossa_fmt = verificar_formatacao_cpf(nr[20]) if nr else "Não encontrado"
+        c_nossa = ws_r.cell(rn, idx_nossa_fmt, nossa_fmt)
+        c_nossa.fill = ORANGE
+        if nossa_fmt != "OK" and nossa_fmt not in ("Não informado", "Não encontrado"):
+            c_nossa.font = Font(color="9C0006", bold=True)
+            
         rn += 1
+        
     for row in npago_nao_bate:
         for i, v in enumerate(row, 1): ws_r.cell(rn, i, v).fill = RED
         ws_r.cell(rn, 6).number_format = 'R$ #,##0.00'
-        ws_r.cell(rn, 16, f'NAO PAGO - SEM REGISTRO - {row[11]}').fill = RED
+        ws_r.cell(rn, idx_situacao, f'NAO PAGO - SEM REGISTRO - {row[11]}').fill = RED
+        
+        japa_fmt = verificar_formatacao_cpf(row[1])
+        c_japa = ws_r.cell(rn, idx_japa_fmt, japa_fmt)
+        c_japa.fill = RED
+        if japa_fmt != "OK" and japa_fmt != "Não informado":
+            c_japa.font = Font(color="9C0006", bold=True)
+            
+        c_nossa = ws_r.cell(rn, idx_nossa_fmt, "Não encontrado")
+        c_nossa.fill = RED
+        
         rn += 1
     auto_width(ws_r)
 
@@ -175,16 +266,41 @@ def gerar_xlsx(resultado):
     ws_res.cell(9, 1, "TOTAL GERAL").font = BOLD
     ws_res.cell(9, 2, total_qtd).font = BOLD
     c = ws_res.cell(9, 3, total_val); c.font = BOLD; c.number_format = 'R$ #,##0.00'
+    
+    # Adicionar estatísticas de alertas de formatação de CPF
+    ws_res.cell(11, 1, "ALERTAS DE FORMATAÇÃO DE CPF").font = Font(bold=True, size=11, color="9C0006")
+    
+    ws_res.cell(13, 1, "Planilha JAPA - CPFs sem pontuação correta:")
+    c_je = ws_res.cell(13, 2, resultado.get('japa_format_erros', 0))
+    c_je.font = BOLD
+    if resultado.get('japa_format_erros', 0) > 0:
+        c_je.font = Font(bold=True, color="9C0006")
+        
+    ws_res.cell(14, 1, "Planilha NOSSA - CPFs sem pontuação correta:")
+    c_ne = ws_res.cell(14, 2, resultado.get('nossa_format_erros', 0))
+    c_ne.font = BOLD
+    if resultado.get('nossa_format_erros', 0) > 0:
+        c_ne.font = Font(bold=True, color="9C0006")
+        
     ws_res.column_dimensions['A'].width = 42
     ws_res.column_dimensions['B'].width = 14
     ws_res.column_dimensions['C'].width = 22
 
     # ── Aba 3: Faltando na NOSSA ──
     ws_f = wb.create_sheet("Faltando na NOSSA")
-    write_header(ws_f, header, HFILL2)
+    write_header(ws_f, header + ['PONTUACAO CPF JAPA'], HFILL2)
+    idx_japa_fmt_f = len(header) + 1
+    
     for rn2, row in enumerate(pago_falta, 2):
         for i, v in enumerate(row, 1): ws_f.cell(rn2, i, v).fill = RED
         ws_f.cell(rn2, 6).number_format = 'R$ #,##0.00'
+        
+        japa_fmt = verificar_formatacao_cpf(row[1])
+        c_japa = ws_f.cell(rn2, idx_japa_fmt_f, japa_fmt)
+        c_japa.fill = RED
+        if japa_fmt != "OK" and japa_fmt != "Não informado":
+            c_japa.font = Font(color="9C0006", bold=True)
+            
     tr = len(pago_falta) + 3
     ws_f.cell(tr, 2, "TOTAL").font = BOLD
     ws_f.cell(tr, 3, f'{len(pago_falta)} registros').font = BOLD
