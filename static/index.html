@@ -173,6 +173,25 @@
   .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
   .badge-verde  { background: #1b5e20; color: #a5d6a7; }
   .badge-amarelo{ background: #f57f17; color: #fff9c4; }
+
+  /* Mobile Responsiveness */
+  @media(max-width: 550px) {
+    header { padding: 16px 20px; }
+    header h1 { font-size: 1.3rem; }
+    .container { padding: 16px 12px; }
+    .upload-section { padding: 20px; }
+    .drop-zone { padding: 20px 10px; }
+    .cards { grid-template-columns: 1fr; gap: 12px; margin-bottom: 20px; }
+    .card { padding: 16px 14px; }
+    .total-bar { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; margin-bottom: 20px; }
+    .total-bar > div { width: 100%; text-align: left !important; }
+    .chart-box { padding: 16px; }
+    .banco-table { padding: 16px 10px; margin-bottom: 20px; }
+    .banco-table h3 { font-size: 0.8rem; margin-bottom: 12px; }
+    th, td { padding: 10px 8px; font-size: 0.75rem; }
+    .bar-cell { gap: 6px; }
+    .bar-cell span { min-width: 30px; font-size: 0.7rem !important; }
+  }
 </style>
 </head>
 <body>
