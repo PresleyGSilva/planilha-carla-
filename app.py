@@ -67,7 +67,7 @@ def processar(path_japa, path_nossa):
 
     nossa_por_cpf  = {}
     nossa_por_prop = {}
-    nossa_format_problemas = 0
+    nossa_format_problemas = {'Sem ponto e sem traço': 0, 'Sem ponto': 0, 'Sem traço': 0, 'CPF Inválido': 0}
     for row in ws2.iter_rows(min_row=4, values_only=True):
         if not any(row): continue
         cpf  = clean_cpf(row[20])
@@ -79,10 +79,12 @@ def processar(path_japa, path_nossa):
         if row[20]:
             nossa_fmt = verificar_formatacao_cpf(row[20])
             if nossa_fmt not in ("OK", "Não informado"):
-                nossa_format_problemas += 1
+                if nossa_fmt not in nossa_format_problemas:
+                    nossa_format_problemas[nossa_fmt] = 0
+                nossa_format_problemas[nossa_fmt] += 1
 
     pago_bate, pago_falta, npago_bate, npago_nao_bate = [], [], [], []
-    japa_format_problemas = 0
+    japa_format_problemas = {'Sem ponto e sem traço': 0, 'Sem ponto': 0, 'Sem traço': 0, 'CPF Inválido': 0}
 
     for row in ws1.iter_rows(min_row=2, values_only=True):
         if row[1] in (None, 'CPF'): continue
@@ -91,7 +93,9 @@ def processar(path_japa, path_nossa):
         # Verificar formatação do CPF na planilha JAPA
         japa_fmt = verificar_formatacao_cpf(row[1])
         if japa_fmt not in ("OK", "Não informado"):
-            japa_format_problemas += 1
+            if japa_fmt not in japa_format_problemas:
+                japa_format_problemas[japa_fmt] = 0
+            japa_format_problemas[japa_fmt] += 1
 
         status   = row[11]
         cpf      = clean_cpf(row[1])
@@ -267,19 +271,22 @@ def gerar_xlsx(resultado):
     ws_res.cell(9, 2, total_qtd).font = BOLD
     c = ws_res.cell(9, 3, total_val); c.font = BOLD; c.number_format = 'R$ #,##0.00'
     
-    # Adicionar estatísticas de alertas de formatação de CPF
     ws_res.cell(11, 1, "ALERTAS DE FORMATAÇÃO DE CPF").font = Font(bold=True, size=11, color="9C0006")
     
+    japa_err_dict = resultado.get('japa_format_erros', {})
+    total_japa_err = sum(japa_err_dict.values()) if isinstance(japa_err_dict, dict) else japa_err_dict
     ws_res.cell(13, 1, "Planilha JAPA - CPFs sem pontuação correta:")
-    c_je = ws_res.cell(13, 2, resultado.get('japa_format_erros', 0))
+    c_je = ws_res.cell(13, 2, total_japa_err)
     c_je.font = BOLD
-    if resultado.get('japa_format_erros', 0) > 0:
+    if total_japa_err > 0:
         c_je.font = Font(bold=True, color="9C0006")
         
+    nossa_err_dict = resultado.get('nossa_format_erros', {})
+    total_nossa_err = sum(nossa_err_dict.values()) if isinstance(nossa_err_dict, dict) else nossa_err_dict
     ws_res.cell(14, 1, "Planilha NOSSA - CPFs sem pontuação correta:")
-    c_ne = ws_res.cell(14, 2, resultado.get('nossa_format_erros', 0))
+    c_ne = ws_res.cell(14, 2, total_nossa_err)
     c_ne.font = BOLD
-    if resultado.get('nossa_format_erros', 0) > 0:
+    if total_nossa_err > 0:
         c_ne.font = Font(bold=True, color="9C0006")
         
     ws_res.column_dimensions['A'].width = 42

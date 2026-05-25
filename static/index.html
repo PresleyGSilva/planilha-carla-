@@ -362,16 +362,28 @@ function mostrarDashboard(d) {
   // Alertas de CPF
   const alertBar = document.getElementById('cpf-alert-bar');
   const alertText = document.getElementById('cpf-alert-text');
-  let alertas = [];
-  if (d.japa_format_erros > 0) {
-    alertas.push(`A planilha <strong>JAPA</strong> possui <strong>${d.japa_format_erros}</strong> CPF(s) sem a pontuação correta (pontos e/ou traço).`);
-  }
-  if (d.nossa_format_erros > 0) {
-    alertas.push(`A planilha <strong>NOSSA</strong> possui <strong>${d.nossa_format_erros}</strong> CPF(s) sem a pontuação correta (pontos e/ou traço).`);
-  }
   
-  if (alertas.length > 0) {
-    alertText.innerHTML = alertas.join('<br>');
+  function renderFormatErrors(name, errObj) {
+    if (!errObj || typeof errObj !== 'object') return '';
+    let total = Object.values(errObj).reduce((a, b) => a + b, 0);
+    if (total === 0) return '';
+    
+    let html = `<strong style="color: #ffb74d;">Planilha ${name}</strong> - ${total} CPFs com problemas:<br><ul style="margin-top: 4px; margin-bottom: 8px; padding-left: 20px;">`;
+    for (const [tipo, qtd] of Object.entries(errObj)) {
+      if (qtd > 0) {
+        html += `<li>${qtd}x ${tipo}</li>`;
+      }
+    }
+    html += `</ul>`;
+    return html;
+  }
+
+  let htmlAlertas = '';
+  htmlAlertas += renderFormatErrors('JAPA', d.japa_format_erros);
+  htmlAlertas += renderFormatErrors('NOSSA', d.nossa_format_erros);
+  
+  if (htmlAlertas !== '') {
+    alertText.innerHTML = htmlAlertas;
     alertBar.style.display = 'flex';
   } else {
     alertBar.style.display = 'none';
